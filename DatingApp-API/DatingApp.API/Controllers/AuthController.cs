@@ -7,8 +7,10 @@ using System.Threading.Tasks;
 using AutoMapper;
 using DatingApp.API.Data;
 using DatingApp.API.Dtos;
+using DatingApp.API.Helpers;
 using DatingApp.API.Models;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -70,10 +72,14 @@ namespace DatingApp.API.Controllers
                 var result = await _signInManager
                 .CheckPasswordSignInAsync(user, userForLoginDto.Password, true);
 
+                var UserLockoutDate = await _userManager.GetLockoutEndDateAsync(user);
+                if (UserLockoutDate == null || UserLockoutDate < DateTime.Now)
+                    user.PenaltEnable = false;
 
                 if (result.Succeeded)
                 {
                     user.NumberOfLockouts = 0;
+                    await _userManager.SetLockoutEndDateAsync(user, null);
                     await _userManager.UpdateAsync(user);
                     var appUser = await _userManager.Users.Include(p => p.Photos)
                         .FirstOrDefaultAsync(u => u.NormalizedUserName == userForLoginDto.Username.ToUpper());
@@ -88,15 +94,44 @@ namespace DatingApp.API.Controllers
                 }
                 else if (result.IsLockedOut)
                 {
-                    DateTimeOffset Penalt = DateTimeOffset.Now.AddMinutes(5*user.NumberOfLockouts);
-                    await _userManager.SetLockoutEndDateAsync(user, Penalt);
-                    return StatusCode(412);
+                    if (!user.PenaltEnable)
+                    {
+                        user.PenaltEnable = true;
+                        DateTimeOffset Penalt = DateTimeOffset.Now.AddMinutes(5 * user.NumberOfLockouts);
+                        await _userManager.SetLockoutEndDateAsync(user, Penalt);
+                    }
+                    
+                    var LockoutTime = await _userManager.GetLockoutEndDateAsync(user);
+                    var RemainingTime = LockoutTime.Value.Subtract(DateTime.Now).Minutes;
+
+                    return new CustomUnauthorizedResult(string.Format(Mensagens.LoginBloqueado,
+                        user.NumberOfLockouts, 
+                        RemainingTime));
                 }
             }
             
             user.NumberOfLockouts++;
             await _userManager.UpdateAsync(user);
             return Unauthorized();
+        }
+
+        public class CustomUnauthorizedResult : JsonResult
+        {
+            public CustomUnauthorizedResult(string message)
+                : base(new CustomError(message))
+            {
+                StatusCode = StatusCodes.Status401Unauthorized;
+            }
+        }
+
+        public class CustomError
+        {
+            public string Error { get; }
+
+            public CustomError(string message)
+            {
+                Error = message;
+            }
         }
 
         private async Task<string> GenerateJwtToken(User user)
