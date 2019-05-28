@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using AutoMapper;
 using DatingApp.API.Data;
 using DatingApp.API.Helpers;
+using DatingApp.API.MessageSender;
 using DatingApp.API.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
@@ -41,7 +42,12 @@ namespace DatingApp.API
         public void ConfigureServices(IServiceCollection services)
         {
             services.AddDbContext<DataContext>(x =>
-                x.UseSqlServer(Configuration.GetConnectionString("DefaultConnection")));
+                x.UseMySql(Configuration.GetConnectionString("DefaultConnection")));
+
+            services.AddDefaultIdentity<IdentityUser>(config =>
+            {
+                config.SignIn.RequireConfirmedEmail = true;
+            });
 
             IdentityBuilder builder = services.AddIdentityCore<User>(opt =>
             {
@@ -49,10 +55,14 @@ namespace DatingApp.API
                 opt.Password.RequiredLength = 4;
                 opt.Password.RequireNonAlphanumeric = false;
                 opt.Password.RequireUppercase = false;
-                
+
                 opt.Lockout.MaxFailedAccessAttempts = 4;
                 opt.Lockout.AllowedForNewUsers = true;
-            });
+
+                opt.Tokens.PasswordResetTokenProvider = TokenOptions.DefaultEmailProvider;
+                opt.Tokens.EmailConfirmationTokenProvider = TokenOptions.DefaultEmailProvider;
+            })
+            .AddDefaultTokenProviders();
 
             builder = new IdentityBuilder(builder.UserType, typeof(Role), builder.Services);
             builder.AddEntityFrameworkStores<DataContext>();
@@ -75,7 +85,7 @@ namespace DatingApp.API
 
             services.IdentityConfiguration();
 
-            services.AddMvc(options => 
+            services.AddMvc(options =>
                 {
                     var policy = new AuthorizationPolicyBuilder()
                         .RequireAuthenticatedUser()
@@ -91,9 +101,11 @@ namespace DatingApp.API
             services.AddCors();
             services.Configure<CloudinarySettings>(Configuration.GetSection("CloudinarySettings"));
             Mapper.Reset();
+
             services.AddAutoMapper();
             services.AddTransient<Seed>();
             services.AddScoped<IDatingRepository, DatingRepository>();
+            services.AddScoped<ISendEmail, SendEmail>();
             services.AddScoped<LogUserActivity>();
         }
 

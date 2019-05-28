@@ -8,6 +8,7 @@ using AutoMapper;
 using DatingApp.API.Data;
 using DatingApp.API.Dtos;
 using DatingApp.API.Helpers;
+using DatingApp.API.MessageSender;
 using DatingApp.API.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -29,18 +30,21 @@ namespace DatingApp.API.Controllers
         //private readonly LockoutOptions _lockoutOptions;
         private readonly UserManager<User> _userManager;
         private readonly SignInManager<User> _signInManager;
+        private readonly ISendEmail _sendEmail;
 
         public AuthController(IConfiguration config,
             IMapper mapper,
             //LockoutOptions lockoutOptions,
             UserManager<User> userManager,
-            SignInManager<User> signInManager)
+            SignInManager<User> signInManager,
+            ISendEmail sendEmail)
         {
             _userManager = userManager;
             _signInManager = signInManager;
             //_lockoutOptions = lockoutOptions;
             _mapper = mapper;
             _config = config;
+            _sendEmail = sendEmail;
         }
 
         [HttpPost("register")]
@@ -69,6 +73,19 @@ namespace DatingApp.API.Controllers
 
             if (user != null)
             {
+                //var code = await _userManager.GenerateEmailConfirmationTokenAsync(user);
+                //var callbackUrl = Url.Page(
+                //    "/Account/ConfirmEmail",
+                //    pageHandler: null,
+                //    values: new { userId = user.Id, code = code },
+                //    protocol: Request.Scheme);
+
+                //await _emailSender.SendEmailAsync(Input.Email, "Confirm your email",
+                //    $"Please confirm your account by <a href='{HtmlEncoder.Default.Encode(callbackUrl)}'>clicking here</a>.");
+
+                ////await _signInManager.SignInAsync(user, isPersistent: false);
+                //return LocalRedirect(returnUrl);
+                
                 var result = await _signInManager
                 .CheckPasswordSignInAsync(user, userForLoginDto.Password, true);
 
